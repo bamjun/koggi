@@ -9,6 +9,7 @@ from ..config.env_loader import DBProfile
 from ..exceptions import KoggiError
 from ..binaries import get_pg_restore_path, get_psql_path
 from ..ui.backup_selector import interactive_backup_selector, quick_latest_selector
+from .cleanup import clean_and_recreate_database, check_database_exists, get_database_size
 
 
 def _pick_latest_backup(backup_dir: Path) -> Optional[Path]:
@@ -24,10 +25,17 @@ def _pick_latest_backup(backup_dir: Path) -> Optional[Path]:
     return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
-def restore_database(profile: DBProfile, *, backup_file: Optional[Path] = None, interactive: bool = True) -> Path:
+def restore_database(
+    profile: DBProfile, 
+    *, 
+    backup_file: Optional[Path] = None, 
+    interactive: bool = True, 
+    clean: bool = False
+) -> Path:
     """Restore the database from backup file.
 
     If backup_file is None, pick the latest file in the profile backup_dir.
+    If clean=True, drops and recreates the database before restore.
     Returns the backup file used.
     """
     pg_restore_path = get_pg_restore_path()
@@ -62,6 +70,20 @@ def restore_database(profile: DBProfile, *, backup_file: Optional[Path] = None, 
         raise KoggiError(f"Backup file does not exist: {used_file}")
     
     used_file = used_file.resolve()
+
+    # Clean database if requested
+    if clean:
+        from rich.console import Console
+        console = Console()
+        
+        # Show current database info before cleaning
+        if check_database_exists(profile, profile.db_name):
+            db_size = get_database_size(profile, profile.db_name)
+            console.print(f"📊 Current database size: {db_size}")
+        
+        # Perform clean operation (skip confirmation when --clean flag is used)
+        if not clean_and_recreate_database(profile, confirm=False):
+            raise KoggiError("Database cleanup was cancelled")
 
     env = os.environ.copy()
     if profile.password:

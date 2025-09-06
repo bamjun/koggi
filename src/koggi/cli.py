@@ -158,6 +158,7 @@ def pg_restore(
     profile: str = typer.Option("DEFAULT", "-p", "--profile", help="Profile name"),
     backup_file: Optional[Path] = typer.Argument(None, help="Backup file path; if omitted, shows interactive selector"),
     latest: bool = typer.Option(False, "--latest", help="Auto-select latest backup without interaction"),
+    clean: bool = typer.Option(False, "-c", "--clean", help="Drop and recreate database before restore (destructive!)"),
 ):
     """Restore a database from a backup file with interactive file selection."""
     profiles = load_profiles()
@@ -171,7 +172,8 @@ def pg_restore(
         used_file = restore_database(
             profiles[profile], 
             backup_file=backup_file, 
-            interactive=interactive_mode
+            interactive=interactive_mode,
+            clean=clean
         )
         console.print(f"[green]Restore completed from:[/green] {used_file}")
     except KoggiError as e:
