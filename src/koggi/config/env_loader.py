@@ -18,6 +18,7 @@ class DBProfile:
     port: int = 5432
     ssl_mode: str = "prefer"
     backup_dir: Path = Path("./backups")
+    allow_restore: bool = True
 
     @property
     def is_production(self) -> bool:
@@ -32,7 +33,7 @@ def load_profiles() -> Dict[str, DBProfile]:
     """Load profiles from environment (and .env if present).
 
     Looks for keys like KOGGI_<PROFILE>_DB_NAME, KOGGI_<PROFILE>_DB_USER, etc.
-    Recognized keys: DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, SSL_MODE, BACKUP_DIR.
+    Recognized keys: DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, SSL_MODE, BACKUP_DIR, ALLOW_RESTORE.
     """
     load_dotenv(override=False)
     env = {k: v for k, v in os.environ.items() if k.startswith("KOGGI_")}
@@ -58,6 +59,11 @@ def load_profiles() -> Dict[str, DBProfile]:
         port = int(values.get("DB_PORT", 5432))
         ssl_mode = values.get("SSL_MODE", "prefer")
         backup_dir = Path(values.get("BACKUP_DIR", "./backups")).resolve()
+        
+        # Parse ALLOW_RESTORE (default: True)
+        allow_restore_str = values.get("ALLOW_RESTORE", "true").lower()
+        allow_restore = allow_restore_str in {"true", "1", "yes", "on"}
+        
         result[profile] = DBProfile(
             name=profile,
             db_name=db_name,
@@ -67,6 +73,7 @@ def load_profiles() -> Dict[str, DBProfile]:
             port=port,
             ssl_mode=ssl_mode,
             backup_dir=backup_dir,
+            allow_restore=allow_restore,
         )
 
     # Ensure DEFAULT exists if partially provided

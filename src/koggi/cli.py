@@ -73,10 +73,12 @@ def config_list() -> None:
     table.add_column("Host")
     table.add_column("Port")
     table.add_column("SSL")
+    table.add_column("Restore")
     table.add_column("Backup Dir")
 
     for name, p in profiles.items():
-        table.add_row(name, p.db_name, p.host, str(p.port), p.ssl_mode, str(p.backup_dir))
+        restore_status = "✅ Allowed" if p.allow_restore else "❌ Disabled"
+        table.add_row(name, p.db_name, p.host, str(p.port), p.ssl_mode, restore_status, str(p.backup_dir))
 
     console.print(table)
 
@@ -165,12 +167,20 @@ def pg_restore(
     if profile not in profiles:
         console.print(f"[red]Profile '{profile}' not found.[/red]")
         raise typer.Exit(code=1)
+    
+    # Check restore permission
+    profile_config = profiles[profile]
+    if not profile_config.allow_restore:
+        console.print(f"[red]❌ Restore operation is disabled for profile '{profile}'[/red]")
+        console.print(f"[dim]Set KOGGI_{profile}_ALLOW_RESTORE=true in .env to enable restore[/dim]")
+        raise typer.Exit(code=1)
+    
     try:
         # Interactive mode unless --latest flag or specific file provided
         interactive_mode = backup_file is None and not latest
         
         used_file = restore_database(
-            profiles[profile], 
+            profile_config, 
             backup_file=backup_file, 
             interactive=interactive_mode,
             clean=clean
