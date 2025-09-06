@@ -1,6 +1,6 @@
 [project]
 name = "koggi"
-version = "0.0.3"
+version = "0.0.4"
 description = "PostgreSQL backup & restore CLI"
 authors = [{name = "bamjun", email = "khy5116@naver.com"}]
 readme = "README.md"
