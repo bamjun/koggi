@@ -1,10 +1,10 @@
 [project]
 name = "koggi"
-version = "0.0.4"
+version = "0.1.1"
 description = "PostgreSQL backup & restore CLI"
 authors = [{name = "bamjun", email = "khy5116@naver.com"}]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 keywords = ["postgresql", "backup", "restore", "cli"]
 dependencies = [
@@ -27,5 +27,8 @@ github = "https://github.com/bamjun/koggi"
 
 [tool.hatch.build]
 include = [
-  "src/koggi/_bin/**",
+  "src/**",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/koggi"]
