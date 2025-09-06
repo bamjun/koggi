@@ -17,3 +17,7 @@ env/
 uv.lock
 
 .claude
+
+
+plan.md
+strategy.md
