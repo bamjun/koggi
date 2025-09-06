@@ -34,9 +34,16 @@ KOGGI_DEV1_BACKUP_DIR=./backups
 - Test connection: `koggi config test DEFAULT`
 - Create backup: `koggi pg backup -p DEFAULT`
 - Restore latest: `koggi pg restore -p DEFAULT`
+ - Check binaries: `koggi binaries which`
 
 Notes
 
-- Requires PostgreSQL client tools in PATH: `pg_dump`, `psql`, `pg_restore`.
+- Embedded binaries: Koggi can use packaged PostgreSQL tools.
+  - Place binaries under `src/koggi/_bin/<os>-<arch>/`:
+    - Example tags: `windows-x86_64`, `darwin-arm64`, `linux-x86_64`.
+    - Required files: `pg_dump[.exe]`, `psql[.exe]`, `pg_restore[.exe]`.
+  - Or put them in cache: `%LOCALAPPDATA%/koggi/bin/<tag>/` (Windows) or `~/.cache/koggi/bin/<tag>/` (Unix).
+  - You can override via env: `KOGGI_PG_DUMP`, `KOGGI_PSQL`, `KOGGI_PG_RESTORE`.
+- If no embedded binary is found, Koggi falls back to system PATH.
 - Passwords are read from env (`KOGGI_<PROFILE>_DB_PASSWORD`) for now.
 - This is Phase 1 scaffold based on plan.md; more features will follow.

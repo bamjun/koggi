@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import datetime as dt
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -11,6 +10,7 @@ from rich.progress import Progress
 
 from ..config.env_loader import DBProfile
 from ..exceptions import KoggiError
+from ..binaries import get_pg_dump_path, find_binary
 
 
 console = Console()
@@ -27,11 +27,16 @@ def backup_database(
 
     Returns the output file path.
     """
-    pg_dump = shutil.which("pg_dump")
-    if not pg_dump:
+    pg_dump_path = get_pg_dump_path()
+    
+    # Check if pg_dump binary exists
+    if not pg_dump_path.exists():
         raise KoggiError(
-            "pg_dump not found. Please install PostgreSQL client tools and ensure they are in PATH."
+            f"pg_dump not found at {pg_dump_path}. "
+            "Install PostgreSQL client tools or use 'koggi binaries download' to get embedded binaries."
         )
+    
+    pg_dump = str(pg_dump_path)
 
     profile.backup_dir.mkdir(parents=True, exist_ok=True)
 
@@ -75,4 +80,3 @@ def backup_database(
             progress.update(task, completed=1)
 
     return out
-

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Optional
 
 from ..config.env_loader import DBProfile
 from ..exceptions import KoggiError
+from ..binaries import get_pg_restore_path, get_psql_path
 
 
 def _pick_latest_backup(backup_dir: Path) -> Optional[Path]:
@@ -29,11 +29,18 @@ def restore_database(profile: DBProfile, *, backup_file: Optional[Path] = None) 
     If backup_file is None, pick the latest file in the profile backup_dir.
     Returns the backup file used.
     """
-    pg_restore = shutil.which("pg_restore")
-    psql = shutil.which("psql")
-    if not (pg_restore and psql):
-        # not strictly needed both; but psql is needed for .sql
-        pass
+    pg_restore_path = get_pg_restore_path()
+    psql_path = get_psql_path()
+    
+    # Check if required binaries exist
+    if not pg_restore_path.exists() and not psql_path.exists():
+        raise KoggiError(
+            f"Neither pg_restore ({pg_restore_path}) nor psql ({psql_path}) found. "
+            "Install PostgreSQL client tools or use 'koggi binaries download' to get embedded binaries."
+        )
+    
+    pg_restore = str(pg_restore_path)
+    psql = str(psql_path)
 
     used_file = backup_file or _pick_latest_backup(profile.backup_dir)
     if not used_file or not used_file.exists():
@@ -47,8 +54,10 @@ def restore_database(profile: DBProfile, *, backup_file: Optional[Path] = None) 
 
     suffix = used_file.suffix.lower()
     if suffix in {".backup", ".dump"}:
-        if not pg_restore:
-            raise KoggiError("pg_restore not found in PATH.")
+        # Use pg_restore for custom format backups
+        if not pg_restore_path.exists():
+            raise KoggiError(f"pg_restore required for {suffix} files but not found at {pg_restore_path}")
+        
         cmd = [
             pg_restore,
             "-h",
@@ -63,8 +72,10 @@ def restore_database(profile: DBProfile, *, backup_file: Optional[Path] = None) 
             str(used_file),
         ]
     else:
-        if not psql:
-            raise KoggiError("psql not found in PATH.")
+        # Use psql for SQL text files
+        if not psql_path.exists():
+            raise KoggiError(f"psql required for {suffix} files but not found at {psql_path}")
+            
         cmd = [
             psql,
             "-h",
@@ -85,4 +96,3 @@ def restore_database(profile: DBProfile, *, backup_file: Optional[Path] = None) 
         raise KoggiError(f"Restore failed: {e}") from e
 
     return used_file
-

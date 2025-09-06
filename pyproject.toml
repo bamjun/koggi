@@ -24,3 +24,8 @@ build-backend = "hatchling.build"
 
 [project.urls]
 github = "https://github.com/bamjun/koggi"
+
+[tool.hatch.build]
+include = [
+  "src/koggi/_bin/**",
+]
