@@ -137,7 +137,7 @@ def config_init(
 def pg_backup(
     profile: str = typer.Option("DEFAULT", "-p", "--profile", help="Profile name"),
     output: Optional[Path] = typer.Option(None, "-o", "--output", help="Output file path"),
-    fmt: str = typer.Option("plain", "--fmt", help="Backup format: plain|custom"),
+    fmt: str = typer.Option("custom", "--fmt", help="Backup format: plain|custom"),
     compress: bool = typer.Option(False, "-c", "--compress", help="Compress output if supported"),
 ):
     """Create a database backup using pg_dump."""

@@ -20,11 +20,12 @@ def backup_database(
     profile: DBProfile,
     *,
     output: Path | None = None,
-    fmt: str = "plain",
+    fmt: str = "custom",
     compress: bool = False,
 ) -> Path:
     """Run pg_dump to create a backup for the given profile.
-
+    
+    Default format is 'custom' which creates .backup files with compression support.
     Returns the output file path.
     """
     pg_dump_path = get_pg_dump_path()
