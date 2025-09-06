@@ -1,25 +1,27 @@
-# 배포하기  
+# 개발 가이드
 
-## 1. 빌드  
+## 1. 빌드
 
 ```
 uv build
 ```
 
-## 2. 배포  
+## 2. 배포
 
 ```
-bash pp.sh test   # 👉 TestPyPI로 업로드
-bash pp.sh        # 👉 MainPyPI로 업로드
+bash pp.sh test   # TestPyPI에 배포
+bash pp.sh        # PyPI에 배포
 ```
 
-### 테스트서버 테스트
+## 3. 로컬 실행
 
 ```
-uv run pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple koggi==0.1.4.5
+PYTHONPATH=src uv run python -m koggi.cli --help
+PYTHONPATH=src uv run python -m koggi.cli config list
 ```
 
-### 로컬 테스트
+또는 설치 후:
+
 ```
-PYTHONPATH=src uv run python src\\koggi\\cli.py --help
+uv run koggi --help
 ```
