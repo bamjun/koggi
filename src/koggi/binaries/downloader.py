@@ -2,6 +2,7 @@
 PostgreSQL binaries downloader.
 
 Downloads and extracts PostgreSQL client tools for the current platform.
+Copies the whole bin directory to ensure Windows DLL dependencies are present.
 """
 
 from __future__ import annotations
@@ -24,26 +25,26 @@ from ..exceptions import KoggiError
 
 console = Console()
 
-# PostgreSQL binaries download URLs and checksums
-BINARY_URLS: Dict[str, Dict[str, str]] = {
+# URL templates for platform-specific binaries (version placeholder: {ver})
+BINARY_URL_TEMPLATES: Dict[str, Dict[str, str]] = {
+    # Windows x64 (EDB packaged binaries)
     "windows-x86_64": {
-        "url": "https://get.enterprisedb.com/postgresql/postgresql-15.4-1-windows-x64-binaries.zip",
-        "sha256": "2d5c0c293d8f6a4f8a5f6f7d7c7b5a5d8c3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a",
+        "template": "https://get.enterprisedb.com/postgresql/postgresql-{ver}-1-windows-x64-binaries.zip",
         "extract_path": "pgsql/bin/",
     },
+    # Linux x64 (Official PostgreSQL binaries)
     "linux-x86_64": {
-        "url": "https://ftp.postgresql.org/pub/binary/v15.4/linux/postgresql-15.4-linux-x64-binaries.tar.xz",
-        "sha256": "3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4",
+        "template": "https://ftp.postgresql.org/pub/binary/v{ver}/linux/postgresql-{ver}-linux-x64-binaries.tar.xz",
         "extract_path": "usr/local/pgsql/bin/",
     },
+    # macOS Intel
     "darwin-x86_64": {
-        "url": "https://ftp.postgresql.org/pub/binary/v15.4/macos/postgresql-15.4-osx-binaries.zip",
-        "sha256": "5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+        "template": "https://ftp.postgresql.org/pub/binary/v{ver}/macos/postgresql-{ver}-osx-binaries.zip",
         "extract_path": "usr/local/pgsql/bin/",
     },
+    # macOS Apple Silicon
     "darwin-arm64": {
-        "url": "https://ftp.postgresql.org/pub/binary/v15.4/macos/postgresql-15.4-osx-arm64-binaries.zip", 
-        "sha256": "6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c",
+        "template": "https://ftp.postgresql.org/pub/binary/v{ver}/macos/postgresql-{ver}-osx-arm64-binaries.zip",
         "extract_path": "usr/local/pgsql/bin/",
     },
 }
@@ -51,31 +52,73 @@ BINARY_URLS: Dict[str, Dict[str, str]] = {
 REQUIRED_TOOLS = ["pg_dump", "psql", "pg_restore"]
 
 
-def get_download_info() -> Optional[Dict[str, str]]:
-    """Get download info for current platform."""
+def _fetch_latest_version_from_ftp() -> Optional[str]:
+    """Fetch latest stable version (e.g., '17.6') from PostgreSQL FTP source listing.
+
+    We use the source directory as authoritative for latest version numbers,
+    then compose platform-specific binary URLs using templates above.
+    """
+    try:
+        with urllib.request.urlopen("https://ftp.postgresql.org/pub/source/") as r:  # noqa: S310
+            html = r.read().decode("utf-8", errors="ignore")
+    except Exception:
+        return None
+    # Extract version strings like v17.6/
+    import re
+
+    versions = re.findall(r">v(\d+\.\d+)/<", html)
+    if not versions:
+        versions = re.findall(r"v(\d+\.\d+)/", html)
+    if not versions:
+        return None
+
+    def key(v: str) -> tuple[int, int]:
+        parts = v.split(".")
+        return (int(parts[0]), int(parts[1]))
+
+    latest = sorted(set(versions), key=key, reverse=True)[0]
+    return latest
+
+
+def get_download_info(version: Optional[str] = None) -> Optional[Dict[str, str]]:
+    """Get download info for current platform.
+
+    If version is None, attempts to detect the latest stable version.
+    Returns dict with keys: url, extract_path, version.
+    """
     platform_tag = get_platform_tag()
-    return BINARY_URLS.get(platform_tag)
+    tpl = BINARY_URL_TEMPLATES.get(platform_tag)
+    if not tpl:
+        return None
+
+    ver = version or _fetch_latest_version_from_ftp() or "17.6"
+    url = tpl["template"].format(ver=ver)
+    return {
+        "url": url,
+        "extract_path": tpl["extract_path"],
+        "version": ver,
+    }
 
 
 def verify_checksum(file_path: Path, expected_sha256: str) -> bool:
     """Verify file SHA256 checksum."""
+    if not expected_sha256:
+        return True
     sha256_hash = hashlib.sha256()
-    
     with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
+        for chunk in iter(lambda: f.read(65536), b""):
             sha256_hash.update(chunk)
-    
-    return sha256_hash.hexdigest() == expected_sha256
+    return sha256_hash.hexdigest().lower() == expected_sha256.lower()
 
 
 def download_file(url: str, dest_path: Path, expected_size: Optional[int] = None) -> None:
     """Download file with progress bar."""
     dest_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    console.print(f"📥 Downloading PostgreSQL binaries...")
+
+    console.print("Downloading PostgreSQL binaries...")
     console.print(f"   URL: {url}")
     console.print(f"   Destination: {dest_path}")
-    
+
     with Progress(
         *Progress.get_default_columns(),
         DownloadColumn(),
@@ -83,167 +126,157 @@ def download_file(url: str, dest_path: Path, expected_size: Optional[int] = None
         console=console,
     ) as progress:
         task = progress.add_task("Downloading...", total=expected_size)
-        
-        def progress_hook(chunk_num: int, chunk_size: int, total_size: int) -> None:
+
+        def progress_hook(block_num: int, block_size: int, total_size: int) -> None:
             if total_size > 0 and not progress.tasks[task].total:
                 progress.update(task, total=total_size)
-            progress.update(task, advance=chunk_size)
-        
+            progress.update(task, advance=block_size)
+
         try:
-            urllib.request.urlretrieve(url, dest_path, progress_hook)
-        except Exception as e:
+            urllib.request.urlretrieve(url, dest_path, progress_hook)  # noqa: S310
+        except Exception as e:  # noqa: BLE001
             raise KoggiError(f"Download failed: {e}") from e
 
 
 def extract_archive(archive_path: Path, extract_to: Path, extract_path: str) -> None:
-    """Extract archive and copy required tools."""
-    console.print(f"📦 Extracting binaries...")
-    
+    """Extract archive and copy required tools and dependencies."""
+    console.print("Extracting binaries...")
+
     temp_extract = extract_to / "temp_extract"
-    temp_extract.mkdir(exist_ok=True)
-    
+    temp_extract.mkdir(parents=True, exist_ok=True)
+
     try:
-        if archive_path.suffix.lower() == ".zip":
+        name = archive_path.name.lower()
+        if name.endswith(".zip"):
             with zipfile.ZipFile(archive_path) as zf:
                 zf.extractall(temp_extract)
-        elif archive_path.suffix.lower() in {".tar.gz", ".tgz", ".tar.xz"}:
+        elif name.endswith((".tar.gz", ".tgz", ".tar.xz")):
             with tarfile.open(archive_path) as tf:
                 tf.extractall(temp_extract)
         else:
             raise KoggiError(f"Unsupported archive format: {archive_path.suffix}")
-        
-        # Find and copy required binaries
+
+        # Locate bin directory
         source_bin_dir = temp_extract / extract_path
         if not source_bin_dir.exists():
-            # Try to find bin directory recursively
             for path in temp_extract.rglob("bin"):
                 if path.is_dir():
                     source_bin_dir = path
                     break
-        
         if not source_bin_dir.exists():
-            raise KoggiError(f"Could not find bin directory in extracted archive")
-        
-        # Copy required tools
+            raise KoggiError("Could not find bin directory in extracted archive")
+
+        # Copy all files from bin directory to cache (exe + dll + etc)
         extract_to.mkdir(parents=True, exist_ok=True)
-        copied_tools = []
-        
+        for item in source_bin_dir.iterdir():
+            if item.is_file():
+                dst = extract_to / item.name
+                shutil.copy2(item, dst)
+                if platform.system() != "Windows":
+                    try:
+                        dst.chmod(0o755)
+                    except Exception:
+                        pass
+
+        # Verify required tools are present
+        missing = []
         for tool in REQUIRED_TOOLS:
-            exe_name = f"{tool}.exe" if platform.system() == "Windows" else tool
-            source_file = source_bin_dir / exe_name
-            dest_file = extract_to / exe_name
-            
-            if source_file.exists():
-                shutil.copy2(source_file, dest_file)
-                dest_file.chmod(0o755)  # Make executable
-                copied_tools.append(tool)
-                console.print(f"   ✅ {tool} -> {dest_file}")
-            else:
-                console.print(f"   ⚠️  {tool} not found in archive")
-        
-        if not copied_tools:
-            raise KoggiError("No required tools found in the downloaded archive")
-        
-        console.print(f"✅ Successfully extracted {len(copied_tools)} tools")
-        
+            exe = f"{tool}.exe" if platform.system() == "Windows" else tool
+            if not (extract_to / exe).exists():
+                missing.append(tool)
+        if missing:
+            raise KoggiError("Archive missing required tools: " + ", ".join(missing))
+
+        console.print(f"Successfully extracted {len(REQUIRED_TOOLS)} tools")
+
     finally:
-        # Cleanup temp directory
         if temp_extract.exists():
-            shutil.rmtree(temp_extract)
+            shutil.rmtree(temp_extract, ignore_errors=True)
 
 
-def download_postgresql_binaries(force: bool = False) -> None:
+def download_postgresql_binaries(
+    force: bool = False,
+    url: Optional[str] = None,
+    version: Optional[str] = None,
+) -> None:
     """Download and install PostgreSQL binaries for current platform."""
     platform_tag = get_platform_tag()
-    
-    console.print(f"🔍 Platform: {platform_tag}")
-    
-    download_info = get_download_info()
-    if not download_info:
-        raise KoggiError(f"No PostgreSQL binaries available for platform: {platform_tag}")
-    
+    console.print(f"Platform: {platform_tag}")
+
+    info = get_download_info(version=version)
+    if not info and not url:
+        raise KoggiError(f"No PostgreSQL binaries available for platform: {platform_tag}. Provide --url to download a specific version.")
+
     cache_dir = get_cache_dir()
-    
-    # Check if already installed
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    # Fast-path if already installed
     if not force:
-        missing_tools = []
-        for tool in REQUIRED_TOOLS:
-            exe_name = f"{tool}.exe" if platform.system() == "Windows" else tool
-            if not (cache_dir / exe_name).exists():
-                missing_tools.append(tool)
-        
-        if not missing_tools:
+        if all((cache_dir / (f"{t}.exe" if platform.system() == "Windows" else t)).exists() for t in REQUIRED_TOOLS):
             console.print("✅ PostgreSQL binaries already installed")
             return
-        
-        console.print(f"📥 Missing tools: {', '.join(missing_tools)}")
-    
-    url = download_info["url"]
-    expected_sha256 = download_info["sha256"]
-    extract_path = download_info["extract_path"]
-    
-    archive_name = Path(url).name
-    archive_path = cache_dir / archive_name
-    
-    # Download if not exists or force
+
+    final_url = url or info["url"]
+    archive_path = cache_dir / Path(final_url).name
+
+    # Download
+    if force and archive_path.exists():
+        try:
+            archive_path.unlink()
+        except Exception:
+            pass
     if force or not archive_path.exists():
-        download_file(url, archive_path)
-    
-    # Verify checksum (commented out for now as we don't have real checksums)
-    # console.print("🔍 Verifying checksum...")
-    # if not verify_checksum(archive_path, expected_sha256):
-    #     raise KoggiError("Downloaded file checksum verification failed")
-    # console.print("✅ Checksum verified")
-    
-    # Extract binaries
+        download_file(final_url, archive_path)
+
+    # Optionally verify checksum
+    sha = (info or {}).get("sha256") or ""
+    if sha and not verify_checksum(archive_path, sha):
+        raise KoggiError("Downloaded file checksum verification failed")
+
+    # Extract to cache/bin/<tag>
+    extract_path = (info or {}).get("extract_path") or ""
+    if not extract_path:
+        # Try to autodetect within archive later; for now require extract_path via mapping
+        # Fallback to common subdir names used by published archives
+        extract_path = "pgsql/bin/"
     extract_archive(archive_path, cache_dir, extract_path)
-    
-    # Cleanup downloaded archive
-    if archive_path.exists():
+
+    # Cleanup archive
+    try:
         archive_path.unlink()
-        console.print(f"🗑️  Cleaned up download file: {archive_name}")
-    
-    console.print("🎉 PostgreSQL binaries installation completed!")
+        console.print(f"Cleaned up download file: {archive_path.name}")
+    except Exception:
+        pass
+
+    console.print("PostgreSQL binaries installation completed!")
 
 
 def check_binaries_status() -> Dict[str, bool]:
-    """Check which required binaries are available."""
+    """Check which required binaries are available in cache dir."""
     cache_dir = get_cache_dir()
-    status = {}
-    
+    status: Dict[str, bool] = {}
     for tool in REQUIRED_TOOLS:
-        exe_name = f"{tool}.exe" if platform.system() == "Windows" else tool
-        binary_path = cache_dir / exe_name
-        status[tool] = binary_path.exists() and binary_path.is_file()
-    
+        exe = f"{tool}.exe" if platform.system() == "Windows" else tool
+        status[tool] = (cache_dir / exe).exists()
     return status
 
 
 def clean_binaries() -> None:
-    """Remove all downloaded binaries."""
+    """Remove cached binaries (executables and DLLs)."""
     cache_dir = get_cache_dir()
-    
     if not cache_dir.exists():
-        console.print("💭 No binaries cache found")
+        console.print("No binaries cache found")
         return
-    
-    removed_tools = []
-    for tool in REQUIRED_TOOLS:
-        exe_name = f"{tool}.exe" if platform.system() == "Windows" else tool
-        binary_path = cache_dir / exe_name
-        
-        if binary_path.exists():
-            binary_path.unlink()
-            removed_tools.append(tool)
-    
-    if removed_tools:
-        console.print(f"🗑️  Removed binaries: {', '.join(removed_tools)}")
-        
-        # Remove cache directory if empty
+    removed = 0
+    for p in cache_dir.iterdir():
         try:
-            cache_dir.rmdir()
-            console.print(f"🗑️  Removed empty cache directory: {cache_dir}")
-        except OSError:
-            pass  # Directory not empty or other error
-    else:
-        console.print("💭 No binaries to remove")
+            if p.is_file():
+                p.unlink()
+                removed += 1
+        except Exception:
+            pass
+    try:
+        cache_dir.rmdir()
+    except Exception:
+        pass
+    console.print(f"Removed {removed} files from {cache_dir}")
