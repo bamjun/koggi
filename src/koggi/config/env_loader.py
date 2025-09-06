@@ -35,7 +35,14 @@ def load_profiles() -> Dict[str, DBProfile]:
     Looks for keys like KOGGI_<PROFILE>_DB_NAME, KOGGI_<PROFILE>_DB_USER, etc.
     Recognized keys: DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, SSL_MODE, BACKUP_DIR, ALLOW_RESTORE.
     """
-    load_dotenv(override=False)
+    # Load .env from current working directory first
+    from pathlib import Path
+    current_env = Path.cwd() / ".env"
+    if current_env.exists():
+        load_dotenv(current_env, override=False)
+    else:
+        # Fallback to default search behavior
+        load_dotenv(override=False)
     env = {k: v for k, v in os.environ.items() if k.startswith("KOGGI_")}
     profiles: dict[str, dict[str, str]] = {}
 

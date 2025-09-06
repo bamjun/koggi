@@ -59,12 +59,94 @@ def _print_version(value: Optional[bool]) -> None:
         raise typer.Exit()
 
 
+@config_app.command("debug")
+def config_debug() -> None:
+    """Debug configuration loading and show .env file search paths."""
+    import os
+    from dotenv import find_dotenv
+    
+    console.print("[bold blue]🔍 Configuration Debug Information[/bold blue]\n")
+    
+    # Current working directory
+    cwd = Path.cwd()
+    console.print(f"📁 Current working directory: {cwd}")
+    
+    # .env file search - prioritize current directory
+    current_env = cwd / ".env"
+    console.print(f"📄 Primary .env file: {current_env}")
+    console.print(f"   Exists: {current_env.exists()}")
+    if current_env.exists():
+        console.print(f"   Size: {current_env.stat().st_size} bytes")
+    
+    # Also show what find_dotenv finds
+    try:
+        env_file = find_dotenv()
+        if env_file and Path(env_file) != current_env:
+            env_path = Path(env_file)
+            console.print(f"📄 Alternative .env found: {env_path}")
+            console.print(f"   (This will be used as fallback only)")
+    except Exception as e:
+        console.print(f"📄 Error in .env search: {e}")
+    
+    # Search paths for .env
+    console.print("\n📍 .env file search paths:")
+    search_paths = [
+        cwd / ".env",
+        cwd.parent / ".env" if cwd.parent != cwd else None,
+        Path.home() / ".env"
+    ]
+    
+    for i, path in enumerate(search_paths, 1):
+        if path:
+            exists = "✅" if path.exists() else "❌"
+            console.print(f"   {i}. {exists} {path}")
+    
+    # Environment variables
+    console.print("\n🌍 KOGGI environment variables:")
+    koggi_vars = {k: v for k, v in os.environ.items() if k.startswith("KOGGI_")}
+    
+    if koggi_vars:
+        table = Table(box=box.SIMPLE_HEAD)
+        table.add_column("Variable", style="cyan")
+        table.add_column("Value", style="green")
+        
+        for var, value in sorted(koggi_vars.items()):
+            # Hide passwords
+            if "PASSWORD" in var:
+                display_value = "***" if value else "(empty)"
+            else:
+                display_value = value or "(empty)"
+            table.add_row(var, display_value)
+        
+        console.print(table)
+    else:
+        console.print("   No KOGGI_ environment variables found")
+    
+    # Load profiles and show results
+    console.print("\n📋 Profile loading results:")
+    try:
+        profiles = load_profiles()
+        if profiles:
+            console.print(f"   ✅ Loaded {len(profiles)} profile(s): {', '.join(profiles.keys())}")
+        else:
+            console.print("   ❌ No profiles loaded")
+            console.print("\n💡 To fix this:")
+            console.print("   1. Create a .env file in current directory")
+            console.print("   2. Add required variables:")
+            console.print("      KOGGI_DEFAULT_DB_NAME=your_db_name")
+            console.print("      KOGGI_DEFAULT_DB_USER=your_username")
+            console.print("      KOGGI_DEFAULT_DB_PASSWORD=your_password")
+            
+    except Exception as e:
+        console.print(f"   ❌ Error loading profiles: {e}")
+
+
 @config_app.command("list")
 def config_list() -> None:
     """List detected profiles from environment/.env."""
     profiles = load_profiles()
     if not profiles:
-        console.print("[yellow]No profiles detected. Run 'koggi config init' or set env vars.[/yellow]")
+        console.print("[yellow]No profiles detected. Run 'koggi config debug' to diagnose or 'koggi config init' to setup.[/yellow]")
         raise typer.Exit(code=1)
 
     table = Table(title="Koggi Profiles", box=box.SIMPLE_HEAD)
@@ -89,6 +171,7 @@ def config_test(profile: str = typer.Argument("DEFAULT", help="Profile name, e.g
     profiles = load_profiles()
     if profile not in profiles:
         console.print(f"[red]Profile '{profile}' not found.[/red]")
+        console.print(f"[dim]Run 'koggi config debug' to see available profiles[/dim]")
         raise typer.Exit(code=1)
     ok, msg = test_connection(profiles[profile])
     if ok:
@@ -146,6 +229,7 @@ def pg_backup(
     profiles = load_profiles()
     if profile not in profiles:
         console.print(f"[red]Profile '{profile}' not found.[/red]")
+        console.print(f"[dim]Run 'koggi config debug' to see available profiles[/dim]")
         raise typer.Exit(code=1)
     try:
         out = backup_database(profiles[profile], output=output, fmt=fmt, compress=compress)
@@ -166,6 +250,7 @@ def pg_restore(
     profiles = load_profiles()
     if profile not in profiles:
         console.print(f"[red]Profile '{profile}' not found.[/red]")
+        console.print(f"[dim]Run 'koggi config debug' to see available profiles[/dim]")
         raise typer.Exit(code=1)
     
     # Check restore permission
@@ -189,14 +274,6 @@ def pg_restore(
     except KoggiError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(code=1)
-
-
-def main() -> None:
-    app()
-
-
-if __name__ == "__main__":
-    main()
 
 
 @binaries_app.command("which")
@@ -337,7 +414,7 @@ def binaries_download(
             raise typer.Exit(1)
             
         download_postgresql_binaries(force=force, url=url, version=version)
-        console.print("[green]Binaries ready![/green] Try: koggi binaries which")
+        console.print("[green]✅ Binaries ready![/green] Try: koggi binaries which")
         
     except KoggiError as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -387,3 +464,10 @@ def binaries_clean() -> None:
     else:
         console.print("Cancelled")
 
+
+def main() -> None:
+    app()
+
+
+if __name__ == "__main__":
+    main()
