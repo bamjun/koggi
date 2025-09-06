@@ -89,6 +89,7 @@ def display_backup_page(
         return
     
     table = Table(box=box.SIMPLE_HEAD)
+    table.add_column("Key", style="yellow", width=4)
     table.add_column("#", style="cyan", width=3)
     table.add_column("File Name", style="green")
     table.add_column("Size", style="magenta", justify="right")
@@ -97,12 +98,19 @@ def display_backup_page(
     
     for i, (file_path, modified_time, size) in enumerate(page_files):
         idx = start_idx + i + 1
+        # Key to press: 1-9 for first 9 items, 0 for 10th item
+        if i == 9:
+            key_to_press = "0"
+        else:
+            key_to_press = str(i + 1)
+        
         name = file_path.name
         size_str = format_file_size(size)
         time_str = modified_time.strftime("%Y-%m-%d %H:%M")
         age_str = format_time_ago(modified_time)
         
         table.add_row(
+            key_to_press,
             str(idx),
             name,
             size_str,
@@ -134,7 +142,8 @@ def get_single_keypress() -> str:
 def show_help() -> None:
     """Show help instructions."""
     console.print("\n[bold]📋 Navigation Help:[/bold]")
-    console.print("• [green]1-9[/green] - Select backup file by number")
+    console.print("• [green]1-9[/green] - Select backup files 1-9")
+    console.print("• [green]0[/green] - Select backup file 10 (if available)")
     console.print("• [blue]n[/blue] - Next page")
     console.print("• [blue]p[/blue] - Previous page")  
     console.print("• [yellow]h[/yellow] - Show this help")
@@ -162,7 +171,14 @@ def interactive_backup_selector(backup_dir: Path, page_size: int = 10) -> Option
         display_backup_page(backup_files, current_page, page_size)
         
         # Show navigation instructions
-        console.print("[dim]Navigation: [blue]n[/blue]ext • [blue]p[/blue]rev • [yellow]h[/yellow]elp • [red]q[/red]uit • [green]1-9[/green] select[/dim]")
+        start_idx = current_page * page_size
+        max_items_on_page = min(page_size, len(backup_files) - start_idx)
+        if max_items_on_page == 10:
+            key_range = "[green]1-9,0[/green]"
+        else:
+            key_range = f"[green]1-{max_items_on_page}[/green]"
+        
+        console.print(f"[dim]Navigation: [blue]n[/blue]ext • [blue]p[/blue]rev • [yellow]h[/yellow]elp • [red]q[/red]uit • {key_range} select[/dim]")
         console.print("Select backup file: ", end="", style="bold")
         
         try:
@@ -197,19 +213,30 @@ def interactive_backup_selector(backup_dir: Path, page_size: int = 10) -> Option
             
             elif key.isdigit():
                 console.print(key)
-                choice = int(key)
                 start_idx = current_page * page_size
+                max_items = min(page_size, len(backup_files) - start_idx)
                 
-                if 1 <= choice <= min(page_size, len(backup_files) - start_idx):
-                    selected_idx = start_idx + choice - 1
-                    selected_file = backup_files[selected_idx][0]
-                    
-                    console.print(f"\n[green]✅ Selected:[/green] {selected_file.name}")
-                    return selected_file
+                # Handle key mapping: 1-9 for first 9 items, 0 for 10th item
+                if key == '0' and max_items == 10:
+                    # 0 key maps to 10th item (index 9)
+                    selected_idx = start_idx + 9
+                elif key != '0' and 1 <= int(key) <= min(9, max_items):
+                    # 1-9 keys map to items 1-9 (indices 0-8)
+                    selected_idx = start_idx + int(key) - 1
                 else:
-                    console.print(f"[red]Invalid selection. Choose 1-{min(page_size, len(backup_files) - start_idx)}[/red]")
+                    # Invalid selection
+                    if max_items == 10:
+                        valid_keys = "1-9,0"
+                    else:
+                        valid_keys = f"1-{max_items}"
+                    console.print(f"[red]Invalid selection. Choose {valid_keys}[/red]")
                     console.print("Press any key to continue...")
                     get_single_keypress()
+                    continue
+                
+                selected_file = backup_files[selected_idx][0]
+                console.print(f"\n[green]✅ Selected:[/green] {selected_file.name}")
+                return selected_file
             
             else:
                 console.print(key)
