@@ -7,6 +7,7 @@ from typing import Optional
 import typer
 from rich import box
 from rich.console import Console
+from rich.prompt import Confirm
 from rich.table import Table
 
 from . import __version__
@@ -224,6 +225,7 @@ def pg_backup(
     output: Optional[Path] = typer.Option(None, "-o", "--output", help="Output file path"),
     fmt: str = typer.Option("custom", "--fmt", help="Backup format: plain|custom"),
     compress: bool = typer.Option(False, "-c", "--compress", help="Compress output if supported"),
+    yes: bool = typer.Option(False, "-y", "--yes", help="Skip confirmation prompt"),
 ):
     """Create a database backup using pg_dump."""
     profiles = load_profiles()
@@ -231,9 +233,27 @@ def pg_backup(
         console.print(f"[red]Profile '{profile}' not found.[/red]")
         console.print(f"[dim]Run 'koggi config debug' to see available profiles[/dim]")
         raise typer.Exit(code=1)
+    
+    # Show database connection info
+    profile_config = profiles[profile]
+    console.print(f"\n[bold blue]🔗 Database Connection Info[/bold blue]")
+    console.print(f"📋 Profile: [cyan]{profile}[/cyan]")
+    console.print(f"🗄️  Database: [green]{profile_config.db_name}[/green]")
+    console.print(f"🌐 Host: [yellow]{profile_config.host}:{profile_config.port}[/yellow]")
+    console.print(f"👤 User: [magenta]{profile_config.user}[/magenta]")
+    console.print(f"🔐 SSL: [dim]{profile_config.ssl_mode}[/dim]")
+    console.print(f"📁 Backup Dir: [dim]{profile_config.backup_dir}[/dim]")
+    console.print()
+    
+    # Confirmation prompt
+    if not yes:
+        if not Confirm.ask("\n[bold]Proceed with backup?[/bold]", default=True):
+            console.print("[yellow]Backup cancelled[/yellow]")
+            raise typer.Exit()
+    
     try:
-        out = backup_database(profiles[profile], output=output, fmt=fmt, compress=compress)
-        console.print(f"[green]Backup completed:[/green] {out}")
+        out = backup_database(profile_config, output=output, fmt=fmt, compress=compress)
+        console.print(f"[green]✅ Backup completed:[/green] {out}")
     except KoggiError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(code=1)
@@ -245,6 +265,7 @@ def pg_restore(
     backup_file: Optional[Path] = typer.Argument(None, help="Backup file path; if omitted, shows interactive selector"),
     latest: bool = typer.Option(False, "--latest", help="Auto-select latest backup without interaction"),
     clean: bool = typer.Option(False, "-c", "--clean", help="Drop and recreate database before restore (destructive!)"),
+    yes: bool = typer.Option(False, "-y", "--yes", help="Skip confirmation prompt"),
 ):
     """Restore a database from a backup file with interactive file selection."""
     profiles = load_profiles()
@@ -260,6 +281,30 @@ def pg_restore(
         console.print(f"[dim]Set KOGGI_{profile}_ALLOW_RESTORE=true in .env to enable restore[/dim]")
         raise typer.Exit(code=1)
     
+    # Show database connection info
+    console.print(f"\n[bold blue]🔗 Database Connection Info[/bold blue]")
+    console.print(f"📋 Profile: [cyan]{profile}[/cyan]")
+    console.print(f"🗄️  Database: [green]{profile_config.db_name}[/green]")
+    console.print(f"🌐 Host: [yellow]{profile_config.host}:{profile_config.port}[/yellow]")
+    console.print(f"👤 User: [magenta]{profile_config.user}[/magenta]")
+    console.print(f"🔐 SSL: [dim]{profile_config.ssl_mode}[/dim]")
+    console.print(f"🔄 Restore: [green]✅ Allowed[/green]")
+    if clean:
+        console.print(f"🧹 Mode: [red]Clean Restore (DROP + CREATE)[/red]")
+    else:
+        console.print(f"🔄 Mode: [yellow]Standard Restore[/yellow]")
+    console.print()
+    
+    # Confirmation prompt
+    if not yes:
+        prompt_text = "\n[bold]Proceed with restore?[/bold]"
+        if clean:
+            prompt_text = "\n[bold red]⚠️  This will DROP and RECREATE the database. Proceed?[/bold red]"
+        
+        if not Confirm.ask(prompt_text, default=False if clean else True):
+            console.print("[yellow]Restore cancelled[/yellow]")
+            raise typer.Exit()
+    
     try:
         # Interactive mode unless --latest flag or specific file provided
         interactive_mode = backup_file is None and not latest
@@ -270,7 +315,7 @@ def pg_restore(
             interactive=interactive_mode,
             clean=clean
         )
-        console.print(f"[green]Restore completed from:[/green] {used_file}")
+        console.print(f"[green]✅ Restore completed from:[/green] {used_file}")
     except KoggiError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(code=1)
