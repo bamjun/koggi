@@ -2,8 +2,14 @@ from __future__ import annotations
 
 import os
 import subprocess
+import threading
+import time
 from pathlib import Path
 from typing import Optional
+
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.live import Live
 
 from ..config.env_loader import DBProfile
 from ..exceptions import KoggiError
@@ -73,7 +79,6 @@ def restore_database(
 
     # Clean database if requested
     if clean:
-        from rich.console import Console
         console = Console()
         
         # Show current database info before cleaning
@@ -106,7 +111,7 @@ def restore_database(
             profile.user,
             "-d",
             profile.db_name,
-            "-v",
+            "--no-password",
             str(used_file),
         ]
     else:
@@ -128,9 +133,81 @@ def restore_database(
             str(used_file),
         ]
 
-    try:
-        subprocess.run(cmd, env=env, check=True)
-    except subprocess.CalledProcessError as e:  # noqa: TRY003
-        raise KoggiError(f"Restore failed: {e}") from e
+    # Execute restore with progress tracking
+    console = Console()
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]Restoring database..."),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
+        transient=True
+    ) as progress:
+        task = progress.add_task("Restoring", total=None)  # Indeterminate progress
+        
+        try:
+            # Run the restore process
+            process = subprocess.Popen(
+                cmd,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding='utf-8',
+                errors='replace'
+            )
+            
+            # Start progress animation in background
+            progress_active = True
+            def update_progress():
+                while progress_active and process.poll() is None:
+                    progress.advance(task)
+                    time.sleep(0.2)
+            
+            # Threading already imported at top
+            progress_thread = threading.Thread(target=update_progress, daemon=True)
+            progress_thread.start()
+            
+            # Wait for process to complete and get outputs
+            stdout, stderr = process.communicate(timeout=300)  # 5 minute timeout
+            progress_active = False  # Stop progress animation
+            return_code = process.returncode
+            
+            # Filter error/warning lines from stderr
+            error_lines = []
+            if stderr:
+                for line in stderr.split('\n'):
+                    line = line.strip()
+                    if line and ('error' in line.lower() or 'failed' in line.lower() or 'warning' in line.lower()):
+                        error_lines.append(line)
+            
+            # Check for errors
+            if return_code != 0:
+                error_msg = f"Restore failed with exit code {return_code}"
+                if error_lines:
+                    error_msg += f"\nErrors:\n" + "\n".join(error_lines)
+                elif stderr:
+                    error_msg += f"\nOutput: {stderr}"
+                raise KoggiError(error_msg)
+                
+            # Show any warnings/errors that occurred during restore
+            if error_lines:
+                console.print("\n[yellow]⚠️  Warnings/Errors during restore:[/yellow]")
+                for line in error_lines:
+                    console.print(f"[dim]  {line}[/dim]")
+                    
+        except subprocess.TimeoutExpired:
+            progress_active = False
+            if process:
+                process.kill()
+                process.wait()
+            raise KoggiError("Restore operation timed out (5 minutes)")
+        except Exception as e:
+            progress_active = False
+            if process and process.poll() is None:
+                process.kill()
+                process.wait()
+            raise KoggiError(f"Restore failed: {e}") from e
 
     return used_file
