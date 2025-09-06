@@ -16,7 +16,9 @@ env/
 
 uv.lock
 
+# AI generated files
 .claude
+.cursor
 
 
 plan.md
