@@ -8,6 +8,7 @@ from typing import Optional
 from ..config.env_loader import DBProfile
 from ..exceptions import KoggiError
 from ..binaries import get_pg_restore_path, get_psql_path
+from ..ui.backup_selector import interactive_backup_selector, quick_latest_selector
 
 
 def _pick_latest_backup(backup_dir: Path) -> Optional[Path]:
@@ -23,7 +24,7 @@ def _pick_latest_backup(backup_dir: Path) -> Optional[Path]:
     return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
-def restore_database(profile: DBProfile, *, backup_file: Optional[Path] = None) -> Path:
+def restore_database(profile: DBProfile, *, backup_file: Optional[Path] = None, interactive: bool = True) -> Path:
     """Restore the database from backup file.
 
     If backup_file is None, pick the latest file in the profile backup_dir.
@@ -42,9 +43,24 @@ def restore_database(profile: DBProfile, *, backup_file: Optional[Path] = None) 
     pg_restore = str(pg_restore_path)
     psql = str(psql_path)
 
-    used_file = backup_file or _pick_latest_backup(profile.backup_dir)
-    if not used_file or not used_file.exists():
-        raise KoggiError("No backup file found to restore.")
+    # Determine which file to use
+    if backup_file:
+        # Specific file provided
+        used_file = backup_file
+    elif interactive:
+        # Interactive selection
+        used_file = interactive_backup_selector(profile.backup_dir)
+        if not used_file:
+            raise KoggiError("No backup file selected.")
+    else:
+        # Auto-select latest (non-interactive mode)
+        used_file = quick_latest_selector(profile.backup_dir)
+        if not used_file:
+            raise KoggiError("No backup files found in backup directory.")
+    
+    if not used_file.exists():
+        raise KoggiError(f"Backup file does not exist: {used_file}")
+    
     used_file = used_file.resolve()
 
     env = os.environ.copy()

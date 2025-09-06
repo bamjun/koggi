@@ -156,15 +156,23 @@ def pg_backup(
 @pg_app.command("restore")
 def pg_restore(
     profile: str = typer.Option("DEFAULT", "-p", "--profile", help="Profile name"),
-    backup_file: Optional[Path] = typer.Argument(None, help="Backup file path; if omitted, latest is used"),
+    backup_file: Optional[Path] = typer.Argument(None, help="Backup file path; if omitted, shows interactive selector"),
+    latest: bool = typer.Option(False, "--latest", help="Auto-select latest backup without interaction"),
 ):
-    """Restore a database from a backup file (auto-detects tool)."""
+    """Restore a database from a backup file with interactive file selection."""
     profiles = load_profiles()
     if profile not in profiles:
         console.print(f"[red]Profile '{profile}' not found.[/red]")
         raise typer.Exit(code=1)
     try:
-        used_file = restore_database(profiles[profile], backup_file=backup_file)
+        # Interactive mode unless --latest flag or specific file provided
+        interactive_mode = backup_file is None and not latest
+        
+        used_file = restore_database(
+            profiles[profile], 
+            backup_file=backup_file, 
+            interactive=interactive_mode
+        )
         console.print(f"[green]Restore completed from:[/green] {used_file}")
     except KoggiError as e:
         console.print(f"[red]Error:[/red] {e}")
