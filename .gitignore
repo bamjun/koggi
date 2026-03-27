@@ -25,3 +25,5 @@ plan.md
 strategy.md
 
 backups/
+
+.koggi/backup/*.zip

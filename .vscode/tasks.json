@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "🤖 Codex: Generate Commit Message",
+      "type": "shell",
+      "command": "cd \"${workspaceFolder}\"; if [ -f .copilot-commit-message-instructions.md ]; then EXISTING=\"$(cat .copilot-commit-message-instructions.md)\"; else EXISTING=\"\"; fi; codex exec --model gpt-5.4 -c model_reasoning_effort='low' -c mcp_servers.linear.enabled=false -c mcp_servers.sequential-thinking.enabled=false -c mcp_servers.context7.enabled=false -c mcp_servers.playwright.enabled=false -c mcp_servers.chrome-devtools.enabled=false \"git diff --cached --stat; git status --short; git diff --cached 사용해서 이를 바탕으로 git commit 메시지를 생성(한글버전과 영어버전 ---으로 구분), 코드를 실무 기준으로 분석해서 각 줄의 역할·문법 의미·왜 이렇게 구현했는지·대안 방식까지 함께 설명(---으로 영역 구분)하고 commit-message.md 넣어줘.\\n\\n[EXISTING MESSAGE]\\n$EXISTING\"",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "✨ gemini: Generate Commit Message",
+      "type": "shell",
+      "command": "cd \"${workspaceFolder}\"; if [ -f .copilot-commit-message-instructions.md ]; then EXISTING=\"$(cat .copilot-commit-message-instructions.md)\"; else EXISTING=\"\"; fi; GEMINI_CONFIG_DIR=/tmp/empty gemini --yolo -p \"git diff --cached --stat; git status --short; git diff --cached 사용해서 이를 바탕으로 git commit 메시지를 생성(한글버전과 영어버전 ---으로 구분), 코드를 실무 기준으로 분석해서 각 줄의 역할·문법 의미·왜 이렇게 구현했는지·대안 방식까지 함께 설명(---으로 영역 구분)하고 commit-message.md 넣어줘.\\n\\n[EXISTING MESSAGE]\\n$EXISTING\" --model gemini-3-flash-preview",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": [],
+      "group": "build"
+    }
+  ]
+}

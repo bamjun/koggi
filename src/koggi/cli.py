@@ -31,6 +31,8 @@ from .binaries.downloader import (
 from .binaries import get_platform_tag
 
 
+from .rc.commands import rc_app
+
 console = Console()
 app = typer.Typer(help="Koggi: PostgreSQL backup & restore CLI")
 pg_app = typer.Typer(help="PostgreSQL operations")
@@ -40,6 +42,7 @@ binaries_app = typer.Typer(help="Embedded PostgreSQL binaries")
 app.add_typer(pg_app, name="pg")
 app.add_typer(config_app, name="config")
 app.add_typer(binaries_app, name="binaries")
+app.add_typer(rc_app, name="rc")
 pg_app.add_typer(binaries_app, name="binaries")
 
 
