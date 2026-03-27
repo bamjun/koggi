@@ -5,13 +5,14 @@
 
 # Quick start
 
-## 1. INSTALL  
+## postgresql backup & restore CLI  
+### 1. INSTALL  
 
 ```
 pip install koggi
 ```
 
-## 2. save settings in project root
+### 2. save settings in project root
 
 ```
 # project-root/.env
@@ -25,26 +26,69 @@ KOGGI_DEFAULT_BACKUP_DIR=./backups
 KOGGI_DEFAULT_ALLOW_RESTORE=true
 ```
 
-## 3. download binary files  
+### 3. download binary files  
 
 ```
 koggi binaries download
 ```
 
-## 4. backup
+### 4. backup
 
 ```
 koggi pg backup
 ```
 
-## 5. restore  
+### 5. restore  
 
 ```
 koggi pg restore
 ```
 
 
+## rclone cloud backup & restore CLI  
 
+### 1. INSTALL  
+
+rclone is required for cloud backup features.
+- Download rclone: [https://rclone.org/downloads/](https://rclone.org/downloads/)
+- Configure your remote storage (e.g., `gdrive`, `s3`) using `rclone config`.
+
+### 2. initialize settings
+
+```
+koggi rc init
+```
+Creates `.koggi/rclone/setting.json` interactively. You can specify remote name, project name, and files/glob patterns to backup.
+
+### 3. backup
+
+```
+koggi rc backup
+```
+Uploads configured files to `<remote>:<project_name>/<timestamp>`.
+- Use `--dry-run` to preview the files that will be uploaded.
+
+### 4. restore
+
+```
+koggi rc restore
+```
+Interactively select a remote backup to restore.
+- **Safety**: If restoring overwrites existing local files, the conflicting files are automatically archived into `.koggi/backup/restore-YYYYMMDD_HHMMSS.zip` before being replaced.
+
+### 5. delete
+
+```
+koggi rc delete
+```
+Interactive menu to manage remote backups:
+- Delete a specific backup
+- Delete ALL backups
+- Keep recent N backups and delete the rest
+
+---
+
+## DB configuration examples (PostgreSQL)
 - Prepare a `.env` with at least one profile (DEFAULT example):
 
 ```
