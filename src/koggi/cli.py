@@ -229,6 +229,8 @@ def pg_backup(
     fmt: str = typer.Option("custom", "--fmt", help="Backup format: plain|custom"),
     compress: bool = typer.Option(False, "-c", "--compress", help="Compress output if supported"),
     yes: bool = typer.Option(False, "-y", "--yes", help="Skip confirmation prompt"),
+    timeout: int = typer.Option(300, "--timeout", "-t", help="Timeout in seconds (default: 300)"),
+    no_limit: bool = typer.Option(False, "--no-limit", help="Disable timeout (no time limit)"),
 ):
     """Create a database backup using pg_dump."""
     profiles = load_profiles()
@@ -236,6 +238,9 @@ def pg_backup(
         console.print(f"[red]Profile '{profile}' not found.[/red]")
         console.print(f"[dim]Run 'koggi config debug' to see available profiles[/dim]")
         raise typer.Exit(code=1)
+    
+    # Resolve timeout value
+    effective_timeout: int | None = None if no_limit else timeout
     
     # Show database connection info
     profile_config = profiles[profile]
@@ -246,6 +251,10 @@ def pg_backup(
     console.print(f"👤 User: [magenta]{profile_config.user}[/magenta]")
     console.print(f"🔐 SSL: [dim]{profile_config.ssl_mode}[/dim]")
     console.print(f"📁 Backup Dir: [dim]{profile_config.backup_dir}[/dim]")
+    if no_limit:
+        console.print(f"⏱️  Timeout: [yellow]No limit[/yellow]")
+    else:
+        console.print(f"⏱️  Timeout: [dim]{effective_timeout}s[/dim]")
     console.print()
     
     # Confirmation prompt
@@ -255,7 +264,7 @@ def pg_backup(
             raise typer.Exit()
     
     try:
-        out = backup_database(profile_config, output=output, fmt=fmt, compress=compress)
+        out = backup_database(profile_config, output=output, fmt=fmt, compress=compress, timeout=effective_timeout)
         console.print(f"[green]✅ Backup completed:[/green] {out}")
     except KoggiError as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -269,6 +278,8 @@ def pg_restore(
     latest: bool = typer.Option(False, "--latest", help="Auto-select latest backup without interaction"),
     clean: bool = typer.Option(False, "-c", "--clean", help="Drop and recreate database before restore (destructive!)"),
     yes: bool = typer.Option(False, "-y", "--yes", help="Skip confirmation prompt"),
+    timeout: int = typer.Option(300, "--timeout", "-t", help="Timeout in seconds (default: 300)"),
+    no_limit: bool = typer.Option(False, "--no-limit", help="Disable timeout (no time limit)"),
 ):
     """Restore a database from a backup file with interactive file selection."""
     profiles = load_profiles()
@@ -276,6 +287,9 @@ def pg_restore(
         console.print(f"[red]Profile '{profile}' not found.[/red]")
         console.print(f"[dim]Run 'koggi config debug' to see available profiles[/dim]")
         raise typer.Exit(code=1)
+    
+    # Resolve timeout value
+    effective_timeout: int | None = None if no_limit else timeout
     
     # Check restore permission
     profile_config = profiles[profile]
@@ -296,6 +310,10 @@ def pg_restore(
         console.print(f"🧹 Mode: [red]Clean Restore (DROP + CREATE)[/red]")
     else:
         console.print(f"🔄 Mode: [yellow]Standard Restore[/yellow]")
+    if no_limit:
+        console.print(f"⏱️  Timeout: [yellow]No limit[/yellow]")
+    else:
+        console.print(f"⏱️  Timeout: [dim]{effective_timeout}s[/dim]")
     console.print()
     
     # Confirmation prompt
@@ -316,7 +334,8 @@ def pg_restore(
             profile_config, 
             backup_file=backup_file, 
             interactive=interactive_mode,
-            clean=clean
+            clean=clean,
+            timeout=effective_timeout,
         )
         console.print(f"[green]✅ Restore completed from:[/green] {used_file}")
     except KoggiError as e:

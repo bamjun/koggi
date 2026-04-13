@@ -24,6 +24,7 @@ def backup_database(
     output: Path | None = None,
     fmt: str = "custom",
     compress: bool = False,
+    timeout: int | None = 300,
 ) -> Path:
     """Run pg_dump to create a backup for the given profile.
     
@@ -108,7 +109,7 @@ def backup_database(
             progress_thread.start()
             
             # Wait for process to complete and get outputs
-            stdout, stderr = process.communicate(timeout=300)  # 5 minute timeout
+            stdout, stderr = process.communicate(timeout=timeout)
             progress_active = False  # Stop progress animation
             return_code = process.returncode
             
@@ -140,7 +141,8 @@ def backup_database(
             if process:
                 process.kill()
                 process.wait()
-            raise KoggiError("Backup operation timed out (5 minutes)")
+            timeout_msg = f"Backup operation timed out ({timeout} seconds)"
+            raise KoggiError(timeout_msg)
         except Exception as e:
             progress_active = False
             if process and process.poll() is None:

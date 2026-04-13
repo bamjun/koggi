@@ -36,7 +36,8 @@ def restore_database(
     *, 
     backup_file: Optional[Path] = None, 
     interactive: bool = True, 
-    clean: bool = False
+    clean: bool = False,
+    timeout: int | None = 300,
 ) -> Path:
     """Restore the database from backup file.
 
@@ -170,7 +171,7 @@ def restore_database(
             progress_thread.start()
             
             # Wait for process to complete and get outputs
-            stdout, stderr = process.communicate(timeout=300)  # 5 minute timeout
+            stdout, stderr = process.communicate(timeout=timeout)
             progress_active = False  # Stop progress animation
             return_code = process.returncode
             
@@ -202,7 +203,8 @@ def restore_database(
             if process:
                 process.kill()
                 process.wait()
-            raise KoggiError("Restore operation timed out (5 minutes)")
+            timeout_msg = f"Restore operation timed out ({timeout} seconds)"
+            raise KoggiError(timeout_msg)
         except Exception as e:
             progress_active = False
             if process and process.poll() is None:
