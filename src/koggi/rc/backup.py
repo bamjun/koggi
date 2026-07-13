@@ -2,6 +2,7 @@ import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 from rich.console import Console
 from rich.table import Table
 from rich import box
@@ -11,7 +12,7 @@ from .config import RcConfig
 
 console = Console()
 
-def run_backup(config: RcConfig, dry_run: bool = False) -> None:
+def run_backup(config: RcConfig, dry_run: bool = False, verbose: Optional[bool] = None) -> None:
     """Run rclone backup for the given config."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     remote_base = f"{config.remote}:{config.project_name}/{timestamp}"
@@ -20,6 +21,10 @@ def run_backup(config: RcConfig, dry_run: bool = False) -> None:
     console.print(f"Remote: [cyan]{remote_base}[/cyan]")
     if dry_run:
         console.print("[yellow]WARNING: DRY RUN MODE - No files will be uploaded[/yellow]")
+        
+    if verbose is None:
+        from rich.prompt import Confirm
+        verbose = Confirm.ask("Do you want to see detailed backup progress log?", default=False)
     
     table = Table(box=box.SIMPLE_HEAD)
     table.add_column("Local Path", style="cyan")
@@ -69,22 +74,35 @@ def run_backup(config: RcConfig, dry_run: bool = False) -> None:
                 cmd = ["rclone", "copyto", str(path), remote_dest]
             else:
                 cmd = ["rclone", "copy", str(path), remote_dest]
+                
+            if verbose:
+                cmd.append("-P")
+                
             if dry_run:
                 cmd.append("--dry-run")
             
             try:
                 # Run the command
-                subprocess.run(
-                    cmd, 
-                    check=True, 
-                    stdout=subprocess.PIPE, 
-                    stderr=subprocess.PIPE,
-                    text=True
-                )
+                if verbose:
+                    # In verbose mode, do not pipe stdout/stderr so it prints directly to the terminal
+                    subprocess.run(
+                        cmd, 
+                        check=True
+                    )
+                else:
+                    # In quiet mode, pipe stdout/stderr to hide it from terminal and parse only if failed
+                    subprocess.run(
+                        cmd, 
+                        check=True, 
+                        stdout=subprocess.PIPE, 
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
                 table.add_row(str(rel_path), remote_dest, "[green]Success[/green]")
                 success_count += 1
             except subprocess.CalledProcessError as e:
-                table.add_row(str(rel_path), remote_dest, f"[red]Failed[/red] ({e.stderr.strip()})")
+                err_msg = e.stderr.strip() if e.stderr else "See console logs above"
+                table.add_row(str(rel_path), remote_dest, f"[red]Failed[/red] ({err_msg})")
                 fail_count += 1
     
     console.print()

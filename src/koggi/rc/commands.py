@@ -1,4 +1,5 @@
 import typer
+from typing import Optional
 from pathlib import Path
 from rich.console import Console
 
@@ -57,13 +58,18 @@ def rc_init() -> None:
 
 @rc_app.command("backup")
 def rc_backup(
-    dry_run: bool = typer.Option(False, "--dry-run", help="Preview what would be transferred without uploading")
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview what would be transferred without uploading"),
+    verbose: Optional[bool] = typer.Option(
+        None, 
+        "--verbose/--no-verbose", "-v", 
+        help="Show detailed backup progress. If not specified, you will be prompted."
+    )
 ) -> None:
     """Backup configured files to remote storage."""
     try:
         find_rc_config()  # check if exists
         config = load_rc_config()
-        run_backup(config, dry_run=dry_run)
+        run_backup(config, dry_run=dry_run, verbose=verbose)
     except KoggiError as e:
         console.print(f"{e}")
         raise typer.Exit(1)
