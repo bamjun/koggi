@@ -133,7 +133,9 @@ def _execute_purge(remote_path: str) -> None:
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            encoding="utf-8",
+            errors="replace"
         )
         console.print("[green]Delete completed successfully![/green]")
     except subprocess.CalledProcessError as e:

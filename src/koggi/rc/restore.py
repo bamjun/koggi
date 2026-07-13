@@ -33,7 +33,9 @@ def list_backups(config: RcConfig) -> list[str]:
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            encoding="utf-8",
+            errors="replace"
         )
         
         # Parse output: rclone lsf returns names with trailing '/'
@@ -102,7 +104,15 @@ def run_restore(config: RcConfig, dest: Path) -> None:
     try:
         console.print("[cyan]Checking for conflicts with local files...[/cyan]")
         lsf_cmd = ["rclone", "lsf", "-R", "--files-only", remote_src]
-        lsf_res = subprocess.run(lsf_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        lsf_res = subprocess.run(
+            lsf_cmd,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace"
+        )
         remote_files = [f.strip() for f in lsf_res.stdout.splitlines() if f.strip()]
         
         conflicts = []
@@ -146,7 +156,9 @@ def run_restore(config: RcConfig, dest: Path) -> None:
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            encoding="utf-8",
+            errors="replace"
         )
         console.print("[green]Restore completed successfully![/green]")
     except subprocess.CalledProcessError as e:

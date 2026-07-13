@@ -114,7 +114,9 @@ def run_backup(config: RcConfig, dry_run: bool = False, verbose: Optional[bool] 
                         check=True, 
                         stdout=subprocess.PIPE, 
                         stderr=subprocess.PIPE,
-                        text=True
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace"
                     )
                 table.add_row(str(rel_path), remote_dest, "[green]Success[/green]")
                 success_count += 1
