@@ -64,6 +64,8 @@ def run_backup(config: RcConfig, dry_run: bool = False, verbose: Optional[bool] 
                 # If outside cwd, just use the name
                 rel_path = Path(path.name)
             
+            rel_path_str = rel_path.as_posix()
+            
             # For rclone, if it's a directory, we need to copy dir to dir.
             # If it's a file, we MUST use copyto, otherwise rclone will create a directory
             # with the file's name and put the file inside.
@@ -74,6 +76,22 @@ def run_backup(config: RcConfig, dry_run: bool = False, verbose: Optional[bool] 
                 cmd = ["rclone", "copyto", str(path), remote_dest]
             else:
                 cmd = ["rclone", "copy", str(path), remote_dest]
+                
+                # Apply exclude patterns
+                for pattern in getattr(config, "exclude", []):
+                    pattern_posix = pattern.replace("\\", "/")
+                    prefix = rel_path_str + "/"
+                    if pattern_posix.startswith(prefix):
+                        cmd.extend(["--exclude", pattern_posix[len(prefix):]])
+                    else:
+                        belongs_to_other = False
+                        for other_file in config.files:
+                            other_file_posix = other_file.replace("\\", "/")
+                            if other_file_posix != rel_path_str and pattern_posix.startswith(other_file_posix + "/"):
+                                belongs_to_other = True
+                                break
+                        if not belongs_to_other:
+                            cmd.extend(["--exclude", pattern_posix])
                 
             if verbose:
                 cmd.append("-P")

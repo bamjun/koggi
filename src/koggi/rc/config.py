@@ -10,6 +10,7 @@ class RcConfig(BaseModel):
     project_name: str = Field(description="Remote project name for path separation")
     remote: str = Field(description="Rclone remote name")
     files: list[str] = Field(description="List of paths or glob patterns to backup")
+    exclude: list[str] = Field(default=[], description="List of glob patterns to exclude from backup")
 
 
 def get_rc_config_path() -> Path:

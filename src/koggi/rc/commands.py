@@ -42,10 +42,21 @@ def rc_init() -> None:
         console.print("[red]At least one path is required.[/red]")
         raise typer.Exit(1)
         
+    console.print("\n[cyan]Enter paths or patterns to exclude (press Enter with empty line to finish).[/cyan]")
+    console.print("[dim]Supports glob patterns, e.g., 'env/Lib/**', '**/*.log'[/dim]")
+    
+    exclude = []
+    while True:
+        path = Prompt.ask("Path to exclude (optional)").strip()
+        if not path:
+            break
+        exclude.append(path)
+        
     config = RcConfig(
         project_name=project_name,
         remote=remote_name,
-        files=files
+        files=files,
+        exclude=exclude
     )
     
     try:
