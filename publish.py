@@ -5,6 +5,14 @@ import subprocess
 from datetime import datetime
 import shutil
 
+# Force UTF-8 encoding for stdout and stderr on Windows
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 def get_current_version():
     pyproject_path = Path("pyproject.toml")
     if not pyproject_path.exists():
@@ -27,6 +35,8 @@ def get_current_version():
     sys.exit(1)
 
 def bump_version(current, bump_type):
+    if bump_type == 'none':
+        return current
     parts = current.split('.')
     if len(parts) != 3:
         return current
@@ -81,17 +91,32 @@ def update_changelog(new_version, description):
     print("Updated CHANGELOG.md")
 
 def run_publish(target):
+    import os
     print(f"\n🚀 Running bash pp.sh {target}...")
+    
     bash_cmd = "bash"
-    if not shutil.which("bash"):
+    if sys.platform == "win32":
+        # Prefer Git Bash on Windows to avoid WSL bash
         git_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
         if git_bash.exists():
             bash_cmd = str(git_bash)
         else:
-            print("Warning: bash not found in PATH or Git default directory. Trying to run pp.sh directly...")
+            found_bash = shutil.which("bash")
+            if found_bash and "System32" not in found_bash:
+                bash_cmd = found_bash
+            else:
+                print("Warning: Git Bash not found. WSL bash may fail to build/publish.")
+    else:
+        if not shutil.which("bash"):
+            print("Warning: bash not found.")
+            
+    env = os.environ.copy()
+    local_bin = str(Path.home() / ".local" / "bin")
+    if local_bin not in env.get("PATH", ""):
+        env["PATH"] = local_bin + os.pathsep + env.get("PATH", "")
             
     try:
-        subprocess.run([bash_cmd, "pp.sh", target], check=True)
+        subprocess.run([bash_cmd, "pp.sh", target], env=env, check=True)
         print("Publish script completed successfully.")
     except subprocess.CalledProcessError as e:
         print(f"Error during publishing: {e}")
@@ -119,7 +144,7 @@ def main():
         # Argument parsing
         import argparse
         parser = argparse.ArgumentParser(description="Automate package release.")
-        parser.add_argument("--bump", choices=["patch", "minor", "major"], default="patch", help="Version bump type (default: patch)")
+        parser.add_argument("--bump", choices=["patch", "minor", "major", "none"], default="patch", help="Version bump type (default: patch)")
         parser.add_argument("--desc", required=True, help="Release description for changelog and commit message")
         parser.add_argument("--target", choices=["main", "test", "none"], default="main", help="Publish target: main (PyPI), test (TestPyPI), or none (default: main)")
         args = parser.parse_args()
@@ -130,11 +155,13 @@ def main():
     else:
         # Interactive mode
         try:
-            bump_choice = input("Select version bump [1: patch, 2: minor, 3: major] (default: 1): ").strip()
+            bump_choice = input("Select version bump [1: patch, 2: minor, 3: major, 4: none] (default: 1): ").strip()
             if bump_choice == '2':
                 bump = 'minor'
             elif bump_choice == '3':
                 bump = 'major'
+            elif bump_choice == '4':
+                bump = 'none'
             else:
                 bump = 'patch'
                 
