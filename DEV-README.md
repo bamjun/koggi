@@ -7,7 +7,7 @@ uv build
 ```
 
 ## 2. 배포
-- 배포 전 `src/koggi/__init__.py`의 `__version__`을 1 증가시켜야 함.
+- 배포 전 `src/koggi/__init__.py`의 `__version__`, `pyproject.toml`의 `version`을 1 증가시켜야 함.
 
 ```
 bash pp.sh test   # TestPyPI에 배포
