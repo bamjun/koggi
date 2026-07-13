@@ -15,7 +15,7 @@ from ..config.env_loader import DBProfile
 from ..exceptions import KoggiError
 from ..binaries import get_pg_restore_path, get_psql_path
 from ..ui.backup_selector import interactive_backup_selector, quick_latest_selector
-from .cleanup import clean_and_recreate_database, check_database_exists, get_database_size
+from .cleanup import clean_and_recreate_database, check_database_exists, get_database_size, create_database
 
 
 def _pick_latest_backup(backup_dir: Path) -> Optional[Path]:
@@ -90,11 +90,18 @@ def restore_database(
         # Perform clean operation (skip confirmation when --clean flag is used)
         if not clean_and_recreate_database(profile, confirm=False):
             raise KoggiError("Database cleanup was cancelled")
+    else:
+        # If not clean restore, but database does not exist, automatically create it
+        if not check_database_exists(profile, profile.db_name):
+            console = Console()
+            console.print(f"[yellow]⚠️  Database '{profile.db_name}' does not exist. Creating it automatically...[/yellow]")
+            create_database(profile, profile.db_name)
 
     env = os.environ.copy()
     if profile.password:
         env["PGPASSWORD"] = profile.password
     env["PGSSLMODE"] = profile.ssl_mode
+    env["PGCLIENTENCODING"] = "utf-8"
 
     suffix = used_file.suffix.lower()
     if suffix in {".backup", ".dump"}:

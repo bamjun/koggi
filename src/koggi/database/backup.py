@@ -73,6 +73,7 @@ def backup_database(
     if profile.password:
         env["PGPASSWORD"] = profile.password
     env["PGSSLMODE"] = profile.ssl_mode
+    env["PGCLIENTENCODING"] = "utf-8"
 
     # Execute backup with progress tracking
     with Progress(

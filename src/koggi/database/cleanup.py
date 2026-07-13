@@ -39,6 +39,7 @@ def drop_database(profile: DBProfile, database_name: str) -> None:
     if profile.password:
         env["PGPASSWORD"] = profile.password
     env["PGSSLMODE"] = profile.ssl_mode
+    env["PGCLIENTENCODING"] = "utf-8"
     
     try:
         result = subprocess.run(cmd, env=env, capture_output=True, text=True, check=True, encoding='utf-8', errors='replace')
@@ -73,6 +74,7 @@ def create_database(profile: DBProfile, database_name: str) -> None:
     if profile.password:
         env["PGPASSWORD"] = profile.password
     env["PGSSLMODE"] = profile.ssl_mode
+    env["PGCLIENTENCODING"] = "utf-8"
     
     try:
         result = subprocess.run(cmd, env=env, capture_output=True, text=True, check=True, encoding='utf-8', errors='replace')
@@ -138,6 +140,7 @@ def check_database_exists(profile: DBProfile, database_name: str) -> bool:
     if profile.password:
         env["PGPASSWORD"] = profile.password
     env["PGSSLMODE"] = profile.ssl_mode
+    env["PGCLIENTENCODING"] = "utf-8"
     
     try:
         result = subprocess.run(cmd, env=env, capture_output=True, text=True, check=True, encoding='utf-8', errors='replace')
@@ -167,6 +170,7 @@ def get_database_size(profile: DBProfile, database_name: str) -> str:
     if profile.password:
         env["PGPASSWORD"] = profile.password
     env["PGSSLMODE"] = profile.ssl_mode
+    env["PGCLIENTENCODING"] = "utf-8"
     
     try:
         result = subprocess.run(cmd, env=env, capture_output=True, text=True, check=True, encoding='utf-8', errors='replace')
